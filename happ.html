@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>RAG Q&A</title>
+</head>
+<body>
+  <h2>Azure RAG Q&A</h2>
+
+  <input id="q" placeholder="Ask a question" />
+  <button onclick="ask()">Ask</button>
+
+  <pre id="ans"></pre>
+
+  <script>
+    async function ask() {
+      const q = document.getElementById("q").value;
+      const res = await fetch("http://localhost:8000/ask", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({question: q})
+      });
+      const data = await res.json();
+      document.getElementById("ans").innerText = data.answer;
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Azure RAG Q&A</title>
+  <style>
+    body { font-family: Arial; background:#f4f4f4; padding:40px }
+    .box { background:#fff; padding:20px; width:600px; border-radius:8px }
+    textarea { width:100%; height:70px }
+    button { padding:6px 12px; margin-top:5px }
+    pre { background:#eee; padding:10px; white-space:pre-wrap }
+  </style>
+</head>
+<body>
+
+<div class="box">
+  <h2>📄 Azure RAG Q&A</h2>
+
+  <textarea id="q" placeholder="Ask your question"></textarea><br>
+
+  <button onclick="ask()">Generate Answer</button>
+  <button onclick="voice()">🎤</button>
+
+  <h3>Answer</h3>
+  <pre id="a"></pre>
+</div>
+
+<script>
+async function ask(text=null){
+  let question = text || document.getElementById("q").value;
+  document.getElementById("a").innerText = "Thinking...";
+
+  let r = await fetch("/ask?q=" + encodeURIComponent(question));
+  document.getElementById("a").innerText = await r.text();
+}
+
+// 🎤 Browser voice input
+function voice(){
+  let rec = new webkitSpeechRecognition();
+  rec.lang = "en-US";
+  rec.start();
+
+  rec.onresult = e => {
+    let text = e.results[0][0].transcript;
+    document.getElementById("q").value = text;
+    ask(text);
+  };
+}
+</script>
+
+</body>
+</html>
