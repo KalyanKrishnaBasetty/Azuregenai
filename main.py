@@ -1,27 +1,46 @@
+# ==========================
+# IMPORTS
+# ==========================
+import os
+import re
+import tempfile
+import pickle
+import numpy as np
+import faiss
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+from pathlib import Path
+from dotenv import load_dotenv
+
 from azure.storage.blob import BlobServiceClient
 from langchain_community.document_loaders import PyPDFLoader
 from docx import Document as DocxDocument
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_community.docstore.document import Document
-import faiss
-import numpy as np
-import tempfile, os, re, pickle
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
 # ==========================
-# Azure Blob Config
+# LOAD ENV
 # ==========================
-AZURE_CONNECTION_STRING = "DefaultEndpointsProtocol=https;AccountName=azurestoragepdf;AccountKey=JwJYpcDOxsZVA+PmeuMfx838rHqh/gwKg1gsi5b1qGHB1sakfhGuG8fo9WECGrKUGfhw8StGpTlh+ASt1kDjcA==;EndpointSuffix=core.windows.net"
-CONTAINER_NAME = "kalyanpdf"
-container_client = BlobServiceClient.from_connection_string(
-    AZURE_CONNECTION_STRING
-).get_container_client(CONTAINER_NAME)
+# Force load .env in the notebook folder
+env_path = Path.cwd() / ".env"
+load_dotenv(env_path)
+
+AZURE_CONNECTION_STRING = os.getenv("AZURE_CONNECTION_STRING")
+CONTAINER_NAME = os.getenv("CONTAINER_NAME")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_GEMINI_API_KEY")
+
 
 # ==========================
-# Text cleaning
+# CONNECT TO AZURE BLOB
+# ==========================
+blob_service_client = BlobServiceClient.from_connection_string(AZURE_CONNECTION_STRING)
+container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+print("Connected to container:", CONTAINER_NAME)
+
+# ==========================
+# TEXT CLEANING FUNCTION
 # ==========================
 def clean_text(text):
     text = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', text)
@@ -29,7 +48,7 @@ def clean_text(text):
     return text.strip()
 
 # ==========================
-# Load documents (PDF + DOCX + TXT)
+# LOAD DOCUMENTS
 # ==========================
 documents_text = []
 
@@ -45,11 +64,9 @@ for blob in container_client.list_blobs():
 
     if ext == ".pdf":
         text = "\n".join([p.page_content for p in PyPDFLoader(tmp_file.name).load()])
-
     elif ext == ".docx":
         doc = DocxDocument(tmp_file.name)
         text = "\n".join([p.text for p in doc.paragraphs])
-
     elif ext == ".txt":
         with open(tmp_file.name, "r", encoding="utf-8", errors="ignore") as f:
             text = f.read()
@@ -58,7 +75,7 @@ for blob in container_client.list_blobs():
     documents_text.append(clean_text(text))
 
 # ==========================
-# Chunking
+# CHUNKING
 # ==========================
 splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
 all_chunks = []
@@ -66,13 +83,11 @@ for txt in documents_text:
     all_chunks.extend(splitter.split_text(txt))
 
 # ==========================
-# Embeddings + FAISS
+# EMBEDDINGS + FAISS
 # ==========================
-API_KEY = "AIzaSyAbVjU3k7xMPAw09qr4tQZ84JZAfoRp2XM"
-
 embedding_model = GoogleGenerativeAIEmbeddings(
     model="models/embedding-001",
-    google_api_key=API_KEY
+    api_key=GEMINI_API_KEY
 )
 
 documents = [Document(page_content=c) for c in all_chunks]
@@ -87,31 +102,20 @@ with open("chunks.pkl", "wb") as f:
     pickle.dump(all_chunks, f)
 
 # ==========================
-# Helpers
+# HELPER FUNCTIONS
 # ==========================
 def load_faiss():
     return faiss.read_index("faiss_index.idx"), pickle.load(open("chunks.pkl", "rb"))
 
 def embed_query(q):
-    return np.array(
-        embedding_model.embed_query(q),
-        dtype="float32"
-    )
+    return np.array(embedding_model.embed_query(q), dtype="float32")
 
 def retrieve(q_emb, index, chunks, k=1):
     _, I = index.search(q_emb.reshape(1, -1), k)
     return [chunks[i] for i in I[0]]
 
 def build_prompt(context, question):
-    return f"""
-Use ONLY the context to answer.
-
-Context:
-{context}
-
-Question: {question}
-Answer:
-"""
+    return f"Use ONLY the context to answer.\n\nContext:\n{context}\n\nQuestion: {question}\nAnswer:"
 
 def safe_post(url, headers, json_data):
     session = requests.Session()
@@ -121,14 +125,12 @@ def safe_post(url, headers, json_data):
 
 def generate_answer(context, question):
     url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
-    data = {
-        "contents": [{"parts": [{"text": build_prompt(context, question)}]}]
-    }
-    res = safe_post(f"{url}?key={API_KEY}", {"Content-Type": "application/json"}, data)
+    data = {"contents": [{"parts": [{"text": build_prompt(context, question)}]}]}
+    res = safe_post(f"{url}?key={GEMINI_API_KEY}", {"Content-Type": "application/json"}, data)
     return res.json()["candidates"][0]["content"]["parts"][0]["text"]
 
 # ==========================
-# QUESTIONS & ANSWERS
+# EXAMPLE QUESTIONS
 # ==========================
 faiss_index, chunks = load_faiss()
 
@@ -143,6 +145,5 @@ for q in questions:
     top_chunk = retrieve(q_emb, faiss_index, chunks, k=1)
     context = "\n\n".join(top_chunk)
     ans = generate_answer(context, q)
-
     print("\nQ:", q)
     print("A:", ans)
