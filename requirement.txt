@@ -1,0 +1,57 @@
+streamlit
+
+# Azure Blob Storage
+azure-storage-blob
+
+# LangChain core + community loaders
+langchain
+langchain-community
+langchain-text-splitters
+
+# Google Gemini embeddings
+langchain-google-genai
+google-generativeai
+
+# PDF + DOCX handling
+pypdf
+python-docx
+
+# Vector store
+faiss-cpu
+
+# HTTP requests
+requests
+urllib3
+
+# Utilities
+numpy
+streamlit
+
+# Speech recognition (NO microphone on Streamlit Cloud)
+speechrecognition
+
+# Core utilities
+numpy
+
+# Vector search
+faiss-cpu
+
+# Azure Blob Storage
+azure-storage-blob
+
+# LangChain ecosystem
+langchain
+langchain-community
+langchain-text-splitters
+
+# Google Gemini embeddings
+langchain-google-genai
+google-generativeai
+
+# PDF and DOCX support
+pypdf
+python-docx
+
+# HTTP networking
+requests
+urllib3
