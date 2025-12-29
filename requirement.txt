@@ -18,4 +18,4 @@ numpy
 requests
 urllib3
 
-speechrecognition
+SpeechRecognition
