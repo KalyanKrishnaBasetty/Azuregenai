@@ -1,21 +1,16 @@
 streamlit
-
-azure-storage-blob
+azure-storage-blob==12.19.1
 
 langchain
 langchain-community
 langchain-text-splitters
-
 langchain-google-genai
 google-generativeai
 
 pypdf
 python-docx
-
 faiss-cpu
 numpy
-
 requests
 urllib3
-
 SpeechRecognition
